@@ -24,8 +24,9 @@ self._is_retrying=false;// when retrying, this is the timer object returned from
 self._retry_timer=null;// maximum miliseconds connection to websocket server
 self._timeout=self._options.timeout||30000;// when connection to websocket server, this is the timer object return from setTimeout()
 self._timeout_timer=null;// maximum connection attempt when timeout
-self._max_connection_attempt=self._options.max_connection_attempt||5;// current number of connection attempt
-self._connection_attempt_count=0}// Deferred factory
+self._max_connection_attempt=self._options.max_connection_attempt||null;// current number of connection attempt
+self._connection_attempt_count=0;// time seconds between reconnect to websocket server
+self._retry_connection_delay=self._options.retry_connection_delay||5000}// Deferred factory
 _createClass(Connection,[{key:"_defer",value:function _defer(){var deferred={};deferred.promise=new Promise(function(resolve,reject){deferred.resolve=resolve;deferred.reject=reject});return deferred}},{key:"_init_transport_factories",value:function _init_transport_factories(){var self=this;// WAMP transport
 //
 var transport_options,transport_factory,transport_factory_klass;for(var i=0;i<self._options.transports.length;++i){// cascading transports until we find one which works
@@ -40,7 +41,7 @@ self._change_status(STATUS.CONNECTING);log.debug("trying to connect.");// create
 self._transport=self._create_transport();if(!self._transport){// failed to create a WAMP transport
 self._retry=false;var details={close_reason:CLOSE_REASON.UNSUPPORTED,reason:null,message:null,retry_delay:null,retry_count:null,will_retry:false};// emit status
 self._change_status(STATUS.CLOSED,details);if(self.onclose){self.onclose(details.close_reason,details)}return}// create a new WAMP session using the WebSocket connection as transport
-self._session=new _session.Session(self._transport,self._defer,self._options.onchallenge);self._session_close_reason=null;self._session_close_message=null;self._timeout_timer=setTimeout(function(){self._retry=false;self._transport.close(1000);clearTimeout(self._timeout_timer);self._timeout_timer=null;self._change_status(STATUS.DISCONNECTED);if(self._connection_attempt_count<self._max_connection_attempt){self._do_retry()}self._connection_attempt_count++},self._timeout);self._transport.onopen=function(){clearTimeout(self._timeout_timer);self._timeout_timer=null;self._connection_attempt_count=0;log.debug(self._transport.info.type+" transport open");// reset auto-reconnect timer and tracking
+self._session=new _session.Session(self._transport,self._defer,self._options.onchallenge);self._session_close_reason=null;self._session_close_message=null;self._timeout_timer=setTimeout(function(){self._retry=false;self._transport.close(1000);clearTimeout(self._timeout_timer);self._timeout_timer=null;self._change_status(STATUS.DISCONNECTED);if(!self._max_connection_attempt||self._max_connection_attempt&&self._connection_attempt_count<self._max_connection_attempt){setTimeout(function(){self._do_retry()},self._retry_connection_delay)}self._connection_attempt_count++},self._timeout);self._transport.onopen=function(){clearTimeout(self._timeout_timer);self._timeout_timer=null;self._connection_attempt_count=0;log.debug(self._transport.info.type+" transport open");// reset auto-reconnect timer and tracking
 self._autoreconnect_reset();// log successful connections
 self._connect_successes+=1;// start WAMP session
 self._session.join(self._options.realm,self._options.authmethods,self._options.authid)};self._session.onjoin=function(details){// ... WAMP session is now attached to realm.
